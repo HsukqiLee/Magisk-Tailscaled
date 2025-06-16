@@ -16,6 +16,11 @@ setting_file="${tailscale_dir}/settings.sh";
 export PATH="/data/adb/magisk:/data/adb/ksu/bin:$PATH:/system/bin:${module_dir}/system/bin:${tailscale_dir}/bin"
 export HOME="/data/adb/tailscale/tmp/" # Because tailscaled will write log to $HOME
 
+# If setuidgid is unknown, use tailscale_user_group="0:3001" instead.
+tailscale_user_group="root:net_bt_admin"
+# tailscale_user=$(stat -c %U /proc/$PID)
+# tailscale_group=$(stat -c %G /proc/$PID)
+
 # Set tailscaled & tailscale configuration
 tailscaled_bin="${tailscale_dir}/bin/tailscaled";
 tailscaled_verbose="0";
@@ -35,8 +40,20 @@ tailscaled_run_dir="${tailscale_dir}/run";
 tailscaled_scripts_dir="${tailscale_dir}/scripts";
 
 # Set tailscaled log variables
-tailscaled_log="${tailscaled_run_dir}/tailscaled.log"
+# tailscaled_log="${tailscaled_run_dir}/tailscaled.log"
+tailscaled_log="/dev/null" # daemon log cannot be accessed
 tailscaled_runs_log="${tailscaled_run_dir}/runs.log"
+
+# prepare iptables 
+va1=$(getprop ro.build.version.release)
+va2="11"
+if [ "$va1" -ge "$va2" ]; then
+  IPV="iptables -w 30"
+  IP6V="ip6tables -w 30"
+else
+  IPV="iptables"
+  IP6V="ip6tables"
+fi
 
 # ===================================================================================
 # Hevsocks
@@ -49,21 +66,21 @@ hevsocks_log="${tailscaled_run_dir}/$(basename ${hevsocks_bin}.log)"
 hevsocks_ifname="hevsocks0"
 # This mode will route all tcp packet use socks5 server tailscale, may unefficient for performance
 hevsocks_up(){
-  iptables -t mangle -N HEVSOCKS 2>/dev/null
-  iptables -t mangle -F HEVSOCKS
-  iptables -t mangle -I OUTPUT -j HEVSOCKS
-  iptables -t mangle -I HEVSOCKS -m owner --uid-owner "root" --gid-owner "net_bt_admin" -j RETURN
-  iptables -t mangle -A HEVSOCKS -p udp --dport 53 -j RETURN
-  iptables -t mangle -A HEVSOCKS -p tcp -j MARK --set-mark 1337
+  $IPV -t mangle -N HEVSOCKS 2>/dev/null
+  $IPV -t mangle -F HEVSOCKS
+  $IPV -t mangle -I OUTPUT -j HEVSOCKS
+  $IPV -t mangle -I HEVSOCKS -m owner --uid-owner 0 --gid-owner 3001 -j RETURN
+  $IPV -t mangle -A HEVSOCKS -p udp --dport 53 -j RETURN
+  $IPV -t mangle -A HEVSOCKS -p tcp -j MARK --set-mark 1337
   ip route add default dev ${hevsocks_ifname} table 21 metric 1
   ip rule add fwmark 1337 lookup 21 pref 10
 }
 hevsocks_down(){
   ip rule del fwmark 1337
   ip route del default dev ${hevsocks_ifname} table 21 metric 1
-  iptables -t mangle -D OUTPUT -j HEVSOCKS
-  iptables -t mangle -F HEVSOCKS
-  iptables -t mangle -X HEVSOCKS
+  $IPV -t mangle -D OUTPUT -j HEVSOCKS
+  $IPV -t mangle -F HEVSOCKS
+  $IPV -t mangle -X HEVSOCKS
 }
 
 # ===================================================================================
@@ -77,16 +94,16 @@ coredns_log="${tailscaled_run_dir}/$(basename ${coredns_bin}.log)"
 coredns_pid="${tailscaled_run_dir}/$(basename ${coredns_bin}.pid)"
 
 coredns_post_up(){
-  iptables -w 10 -t nat -N DNS_LOCAL
-  iptables -w 10 -t nat -F DNS_LOCAL
-  iptables -w 10 -t nat -I DNS_LOCAL -m owner --uid-owner "root" --gid-owner "net_bt_admin" -j RETURN
-  iptables -w 10 -t nat -A DNS_LOCAL -p udp --dport 53 ! -s 100.64.0.0/10 ! -d 100.100.100.100 -j DNAT --to-destination 127.0.0.1:1953
-  iptables -w 10 -t nat -I OUTPUT -j DNS_LOCAL
+  $IPV -t nat -N DNS_LOCAL
+  $IPV -t nat -F DNS_LOCAL
+  $IPV -t nat -I DNS_LOCAL -m owner --uid-owner 0 --gid-owner 3001 -j RETURN
+  $IPV -t nat -A DNS_LOCAL -p udp --dport 53 ! -s 100.64.0.0/10 ! -d 100.100.100.100 -j DNAT --to-destination 127.0.0.1:1953
+  $IPV -t nat -I OUTPUT -j DNS_LOCAL
 }
 coredns_pre_down(){
-  iptables -w 10 -t nat -D OUTPUT -j DNS_LOCAL
-  iptables -w 10 -t nat -F DNS_LOCAL
-  iptables -w 10 -t nat -X DNS_LOCAL
+  $IPV -t nat -D OUTPUT -j DNS_LOCAL
+  $IPV -t nat -F DNS_LOCAL
+  $IPV -t nat -X DNS_LOCAL
 }
 
 # ===================================================================================

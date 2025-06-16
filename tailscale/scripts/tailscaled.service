@@ -4,9 +4,6 @@ DIR=$(dirname $(realpath $0))
 source $DIR/../settings.sh
 scripts_name=$(basename $0)
 
-
-
-
 program(){
   ## hehe
 
@@ -18,6 +15,7 @@ program(){
   # post_up
   # post_down
 
+  echo "$(date)" > ${tailscaled_runs_log}
   log "bin_file ${bin_file}"
   log "logdir ${logdir}"
   log "command ${command}"
@@ -42,8 +40,9 @@ program(){
     if [ $? -ne 0 ]; then return 0; fi
     if ! [ -f "${bin_file}" ]; then log Error "file not found: ${bin_file}"; return 1; fi
     [ -f "${log_file}" ] && mv "${log_file}" "${log_file}.bak" # log for old output
-    if [ ! -z "${pre_up}" ];then $pre_up  2>&1; fi
-    nohup ${command}> "${logdir}/${bin_name}.log" 2>&1 &
+    if [ ! -z "${pre_up}" ];then $pre_up 2>&1; fi
+    nohup ${command}> "${tailscaled_log}" 2>&1 &
+    # nohup ${command} > /dev/null 2>&1 &
     PID=$!
     log "Command: ${command}"
     sleep 3 # waiting for program really started
@@ -107,7 +106,7 @@ program(){
   }
   restart(){
     log Info "Restarting ${bin_name} service."
-    program stop 
+    program stop >/dev/null 2>&1
     sleep 0.5
     program start
   }
@@ -119,7 +118,7 @@ _tailscaled(){
   bin_file="${tailscaled_bin}"
   logdir="${tailscale_dir}/run"
   command="${tailscaled_bin} ${tailscaled_bin_param}"
-  command="busybox setuidgid "root:net_bt_admin" ${tailscaled_bin} ${tailscaled_bin_param}"
+  command="busybox setuidgid "${tailscale_user_group}" ${tailscaled_bin} ${tailscaled_bin_param}"
   tailscaled_up(){
     sed -Ei "s/^description=(\[.*][[:space:]]*)?/description=[ ⏲ $current_time | ✔ tailscaled service is running!!! ] /g" "$module_prop"
     if $coredns_autostart; then
@@ -178,15 +177,36 @@ _tailscaled(){
     ;;
   esac
 }
+
+get_proc_info() {
+  PID=$(pidof tailscaled)
+  INFO=($(ps -p "$PID" -o %mem=,%cpu=,rss=,stat=,etime=))
+
+  MEM="${INFO[0]}"
+  CPU="${INFO[1]}"
+  RSS="${INFO[2]}"
+  STAT="${INFO[3]}"
+  ELAPSED="${INFO[4]}"
+
+  echo "  ↳ pid      \t\t\t${yellow}${PID}${normal}"
+  echo "  ↳ memory   \t\t\t${yellow}${MEM}% (${RSS} KB)${normal}"
+  echo "  ↳ cpu      \t\t\t${yellow}${CPU}%${normal}"
+  echo "  ↳ status   \t\t\t${yellow}${STAT}${normal}"
+  echo "  ↳ elapsed  \t\t\t${yellow}${ELAPSED}${normal}"
+  echo""
+}
+
 status_tailscaled(){
   echo "${blue}Service Status Info${normal}"
   $(_tailscaled status) && tailscaled_run=false || tailscaled_run=true
   echo -ne "${yellow}tailscale${normal}\t\t\t"
   if $tailscaled_run; then
       echo "${green}running${normal}"
+      get_proc_info
       echo "  ↳ tun   \t\t\t${yellow}${tailscaled_tun_mode}${normal}"
       echo "  ↳ socks \t\t\t${yellow}${tailscaled_socks}${normal}"
       echo "  ↳ proxy \t\t\t${yellow}${tailscaled_proxy}${normal}"
+      echo ""
       tailscale_ip=$($tailscale_bin $tailscale_bin_param ip 2>&1)
       if [ $? -ne 0 ]; then
         if echo "$tailscale_ip" | grep -q 'NeedsLogin'; then
@@ -287,7 +307,7 @@ status_tailscaled(){
 _coredns(){
   export bin_file="${coredns_bin}"
   export logdir="${tailscale_dir}/run"
-  export command="busybox setuidgid "root:net_bt_admin" ${coredns_bin} -conf ${coredns_conf}"
+  export command="busybox setuidgid "${tailscale_user_group}" ${coredns_bin} -conf ${coredns_conf}"
   pre_up=""
   pre_down="coredns_pre_down"
   post_up="coredns_post_up"
@@ -306,7 +326,7 @@ _coredns(){
             log Error "Download error, manual download coredns from https://github.com/anasfanani/Magisk-Tailscaled/raw/main/files/coredns-${arch} and extract to ${coredns_bin}"
             return;
           fi
-          chown root:net_bt_admin ${coredns_bin}
+          chown ${tailscale_user_group} ${coredns_bin}
           chmod +x ${coredns_bin}
         fi
         if ! [ -f "${coredns_conf}" ];then
@@ -411,7 +431,7 @@ _hevsocks(){
             log Error "Download error, manual download hevsocks from https://github.com/anasfanani/Magisk-Tailscaled/raw/main/files/hevsocks-${arch} and extract to ${hevsocks_bin}"
             return;
           fi
-          chown root:net_bt_admin ${bin_file}
+          chown ${tailscale_user_group} ${bin_file}
           chmod +x ${bin_file}
         fi
         if ! [ -f "${hevsocks_conf}" ];then
@@ -517,15 +537,19 @@ _hevsocks(){
 _log(){
   case "$1" in
     hevsocks)
+      [ -f "${hevsocks_log}" ] && \
       busybox less -F~ "${hevsocks_log}"
       ;;
     dns)
+      [ -f "${coredns_log}" ] && \
       busybox tail -q -n +1 -F "${coredns_log}"
       ;;
     service)
+      [ -f "${tailscaled_runs_log}" ] && \
       busybox less -F~ "${tailscaled_runs_log}"
       ;;
     daemon)
+      [ -f "${tailscaled_log}" ] && \
       busybox tail -q -n +1 -F "${tailscaled_log}"
       ;;
     *)

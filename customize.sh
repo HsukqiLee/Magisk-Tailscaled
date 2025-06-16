@@ -74,10 +74,11 @@ if [ ! -f "$SERVICE_DIR/tailscaled_service.sh" ]; then
     ui_print "- You have 10 seconds to make a selection. Default is [Yes]."
     ui_print "- [ Vol UP(+): Yes ]"
     ui_print "- [ Vol DOWN(-): No ]"
-    start_time=`date +%s`
+
+    start_time=$(date +%s)
     while true; do
-      current_time=`date +%s`
-      time_diff=`expr $current_time - $start_time`
+      current_time=$(date +%s)
+      time_diff=$(expr $current_time - $start_time)
       if [ $time_diff -ge 10 ]; then
         ui_print "- Time's up! Proceeding with default option [Yes]."
         ui_print "- Move Module Scripts to General Scripts."
@@ -98,34 +99,39 @@ else
     ui_print "- Move General Scripts."
     mv -f "$MODPATH/service.sh" "$SERVICE_DIR/tailscaled_service.sh"
 fi
+
 ui_print "- Starting service in background."
 ${CUSTOM_SCRIPTS_DIR}/start.sh postinstall 2>&1 &
+
 if [ ! -f "/system/bin/tailscale" ] || ! cmp --silent "/system/bin/tailscale" "$MODPATH/system/bin/tailscale"; then
-  ui_print "- Link file to /dev/."
+  ui_print "- Linking tailscale binaries to /dev/"
   ln -sf "$CUSTOM_SCRIPTS_DIR/tailscaled.service" /dev/tailscaled.service
   ln -sf "$MODPATH/system/bin/tailscale" /dev/tailscale
+
   ui_print "-----------------------------------------------------------"
-  ui_print " Instructions       "
+  ui_print " Instructions"
   ui_print "-----------------------------------------------------------"
-  ui_print "- If you not reboot, execute with /dev/tailscale or /dev/tailscaled.service."
-  ui_print "- After reboot, you can use tailscale and tailscaled.service directly."
+  ui_print "- If you don't reboot, use /dev/tailscale and /dev/tailscaled.service"
+  ui_print "- After reboot, you can run tailscale and tailscaled.service directly"
+
   if [ ! -f "$CUSTOM_TMP_DIR/tailscaled.state" ]; then
-    ui_print "- Quickstart to new user :"
+    ui_print "- Quickstart for new users:"
     ui_print "  su -c '/dev/tailscale login'"
     ui_print "  su -c '/dev/tailscaled.service status'"
-    ui_print "- Read the README.md"
+    ui_print "- Refer to README.md for more information"
   else
-    ui_print "- Tailscaled service manager :"
+    ui_print "- Tailscaled service manager:"
     ui_print "  su -c '/dev/tailscaled.service'"
   fi
+
 else
   if [ ! -f "$CUSTOM_TMP_DIR/tailscaled.state" ]; then
-    ui_print "- Quickstart to login :"
+    ui_print "- Quickstart to login:"
     ui_print "  su -c 'tailscale login'"
     ui_print "  su -c 'tailscaled.service status'"
-    ui_print "- Read the README.md"
+    ui_print "- Refer to README.md for more information"
   else
-    ui_print "- Tailscaled service manager :"
+    ui_print "- Tailscaled service manager:"
     ui_print "  su -c 'tailscaled.service'"
   fi
 fi
