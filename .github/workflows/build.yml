@@ -1,4 +1,4 @@
-name: Build tailscale for Android
+name: Build Tailscale for Android
 on:
   workflow_dispatch:
     inputs:
@@ -31,10 +31,10 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Go 1.22.x
+    - name: Setup Go 1.24.x
       uses: actions/setup-go@v5
       with:
-        go-version: '1.22.x'
+        go-version: '1.24.x'
     
     - name: Display Go version
       run: go version
@@ -43,7 +43,7 @@ jobs:
       id: setup-ndk
       uses: nttld/setup-ndk@v1
       with:
-        ndk-version: r26d
+        ndk-version: r29-beta1
         add-to-path: false
 
     - name: Display NDK path
@@ -51,18 +51,18 @@ jobs:
         echo "NDK path: ${{ steps.setup-ndk.outputs.ndk-path }}"
         ls -la ${{ steps.setup-ndk.outputs.ndk-path }}
 
-    
-
     - name: Download latest Tailscale source code
       run: |
         mkdir -p build
         cd build
-        latestTarballurl="${{ fromJSON(steps.get_stable_release.outputs.data).tarball_url }}"
-        mkdir -p tailscale
-        curl -L $latestTarballurl -o tailscale.tar.gz
-        tar -xzf tailscale.tar.gz -C tailscale --strip-components=1
+        # latestTarballurl="${{ fromJSON(steps.get_stable_release.outputs.data).tarball_url }}"
+        # mkdir -p tailscale
+        # curl -L $latestTarballurl -o tailscale.tar.gz
+        # tar -xzf tailscale.tar.gz -C tailscale --strip-components=1
+        echo "Cloning repo..."
+        git clone https://github.com/KyuubiRan/tailscale.git tailscale
         ls -la tailscale
-        rm tailscale.tar.gz
+        # rm tailscale.tar.gz
         cd ..
 
     - name: Build Tailscale for Android
@@ -99,30 +99,31 @@ jobs:
         cd ../..
         rm -rf build
 
-    - name: Install UPX
-      uses: crazy-max/ghaction-upx@v3
-      with:
-        install-only: true
+    # - name: Install UPX
+      # uses: crazy-max/ghaction-upx@v3
+      # with:
+        # install-only: true
 
     - name: Compress binaries
       run: |
         # https://tailscale.com/kb/1207/small-tailscale
-        upx --version
-        echo "Compressing tailscale binaries for arm"
-        du -hs ./dist/tailscale.combined-arm
-        upx --lzma --best ./dist/tailscale.combined-arm
-        du -hs ./dist/tailscale.combined-arm
+        # upx --version
+        # echo "Compressing tailscale binaries for arm"
+        # du -hs ./dist/tailscale.combined-arm
+        # upx --lzma --best ./dist/tailscale.combined-arm
+        # du -hs ./dist/tailscale.combined-arm
 
-        echo "Compressing tailscale binaries for arm64"
-        du -hs ./dist/tailscale.combined-arm64
-        upx --lzma --best ./dist/tailscale.combined-arm64
-        du -hs ./dist/tailscale.combined-arm64
+        # echo "Compressing tailscale binaries for arm64"
+        # du -hs ./dist/tailscale.combined-arm64
+        # upx --lzma --best ./dist/tailscale.combined-arm64
+        # du -hs ./dist/tailscale.combined-arm64
 
         echo "Moving compressed binaries to files directory"
         mkdir -p files
         mv ./dist/tailscale.combined-arm files/tailscale.combined-arm
         mv ./dist/tailscale.combined-arm64 files/tailscale.combined-arm64
         rm -rf dist
+
     # - name: Upload artifacts
     #   uses: actions/upload-artifact@v4
     #   with:
@@ -149,16 +150,16 @@ jobs:
         sed -i "s/^versionCode=.*/versionCode=$newVersionCode/" module.prop
 
         # Estimate the zip url location
-        zipUrl="https://github.com/anasfanani/Magisk-Tailscaled/releases/download/$versionString/Magisk-Tailscaled-$versionString.zip" # Universal
-        zipUrl_arm="https://github.com/anasfanani/Magisk-Tailscaled/releases/download/$versionString/Magisk-Tailscaled-arm-$versionString.zip" # Arm
-        zipUrl_arm64="https://github.com/anasfanani/Magisk-Tailscaled/releases/download/$versionString/Magisk-Tailscaled-arm64-$versionString.zip" # Arm64
+        zipUrl="https://github.com/taamarin/Magisk-Tailscaled/releases/download/$versionString/Magisk-Tailscaled-$versionString.zip" # Universal
+        zipUrl_arm="https://github.com/taamarin/Magisk-Tailscaled/releases/download/$versionString/Magisk-Tailscaled-arm-$versionString.zip" # Arm
+        zipUrl_arm64="https://github.com/taamarin/Magisk-Tailscaled/releases/download/$versionString/Magisk-Tailscaled-arm64-$versionString.zip" # Arm64
 
         # Update update.json
         jq '.version = $newVersion | .versionCode = $newVersionCode | .zipUrl = $newZipUrl | .changelog = $newChangelog' \
           --arg newVersion "${versionString}" \
           --arg newVersionCode "$newVersionCode" \
           --arg newZipUrl "$zipUrl" \
-          --arg newChangelog "https://raw.githubusercontent.com/anasfanani/Magisk-Tailscaled/master/CHANGELOG.md" \
+          --arg newChangelog "https://raw.githubusercontent.com/taamarin/Magisk-Tailscaled/master/CHANGELOG.md" \
           update.json > temp.json && mv temp.json update.json
 
         # Update update-arm.json
@@ -167,7 +168,7 @@ jobs:
           --arg newVersion "${versionString}-arm" \
           --arg newVersionCode "$newVersionCode" \
           --arg newZipUrl "$zipUrl_arm" \
-          --arg newChangelog "https://raw.githubusercontent.com/anasfanani/Magisk-Tailscaled/master/CHANGELOG.md" \
+          --arg newChangelog "https://raw.githubusercontent.com/taamarin/Magisk-Tailscaled/master/CHANGELOG.md" \
           update-arm.json > temp.json && mv temp.json update-arm.json
 
         # Update update-arm64.json
@@ -176,7 +177,7 @@ jobs:
           --arg newVersion "${versionString}-arm64" \
           --arg newVersionCode "$newVersionCode" \
           --arg newZipUrl "$zipUrl_arm64" \
-          --arg newChangelog "https://raw.githubusercontent.com/anasfanani/Magisk-Tailscaled/master/CHANGELOG.md" \
+          --arg newChangelog "https://raw.githubusercontent.com/taamarin/Magisk-Tailscaled/master/CHANGELOG.md" \
           update-arm64.json > temp.json && mv temp.json update-arm64.json
 
     - name: Commit and push
@@ -199,44 +200,44 @@ jobs:
         if git diff --staged --quiet; then
           echo "No changes to commit"
         else
-          git commit -m "Updated from ${{ env.OLD_TAILSCALE_VERSION_TAG }} to ${{ env.LATEST_TAILSCALE_VERSION_TAG }}"
+          git commit -m "[updated] Tailscale from ${{ env.OLD_TAILSCALE_VERSION_TAG }} to ${{ env.LATEST_TAILSCALE_VERSION_TAG }}"
           git tag ${{ env.LATEST_TAILSCALE_VERSION_TAG }}.0
           git push origin ${{ env.LATEST_TAILSCALE_VERSION_TAG }}.0
           git push
         fi
   
-    - name: Create Zip file for release
-      run: |
-        versionString="${{ env.LATEST_TAILSCALE_VERSION_TAG }}.0"
-        mkdir -p dist
+    # - name: Create Zip file for release
+      # run: |
+        # versionString="${{ env.LATEST_TAILSCALE_VERSION_TAG }}.0"
+        # mkdir -p dist
 
-        # zip all files
-        zip -9 -r "./dist/Magisk-Tailscaled-${versionString}.zip" . -x "*.git*" "dist/*" "*.zip" "*.json" "*.md"
-        # zip all files for arm64
-        sed -i 's/arm)   F_ARCH=$ARCH;;/#arm)   F_ARCH=$ARCH;;/g' customize.sh # disable arm
-        zip -9 -r "./dist/Magisk-Tailscaled-arm64-${versionString}.zip" . -x "*.git*" "dist/*" "*.zip" "*.json" "files/*" "*.md"
-        zip -9 "./dist/Magisk-Tailscaled-arm64-${versionString}.zip" "files/tailscale.combined-arm64"
-        # zip all files for arm
-        sed -i 's/#arm)   F_ARCH=$ARCH;;/arm)   F_ARCH=$ARCH;;/g' customize.sh # enable arm
-        sed -i 's/arm64)   F_ARCH=$ARCH;;/#arm64)   F_ARCH=$ARCH;;/g' customize.sh # disable arm64
-        zip -9 -r "./dist/Magisk-Tailscaled-arm-${versionString}.zip" . -x "*.git*" "dist/*" "*.zip" "*.json" "files/*" "*.md"
-        zip -9 "./dist/Magisk-Tailscaled-arm-${versionString}.zip" "files/tailscale.combined-arm"
-        cd ..
+        # # zip all files
+        # zip -9 -r "./dist/Magisk-Tailscaled-${versionString}.zip" . -x "*.git*" "dist/*" "*.zip" "*.json" "*.md"
+        # # zip all files for arm64
+        # sed -i 's/arm)   F_ARCH=$ARCH;;/#arm)   F_ARCH=$ARCH;;/g' customize.sh # disable arm
+        # zip -9 -r "./dist/Magisk-Tailscaled-arm64-${versionString}.zip" . -x "*.git*" "dist/*" "*.zip" "*.json" "files/*" "*.md"
+        # zip -9 "./dist/Magisk-Tailscaled-arm64-${versionString}.zip" "files/tailscale.combined-arm64"
+        # # zip all files for arm
+        # sed -i 's/#arm)   F_ARCH=$ARCH;;/arm)   F_ARCH=$ARCH;;/g' customize.sh # enable arm
+        # sed -i 's/arm64)   F_ARCH=$ARCH;;/#arm64)   F_ARCH=$ARCH;;/g' customize.sh # disable arm64
+        # zip -9 -r "./dist/Magisk-Tailscaled-arm-${versionString}.zip" . -x "*.git*" "dist/*" "*.zip" "*.json" "files/*" "*.md"
+        # zip -9 "./dist/Magisk-Tailscaled-arm-${versionString}.zip" "files/tailscale.combined-arm"
+        # cd ..
 
-    - name: Create Release
-      id: create_release
-      uses: softprops/action-gh-release@v2
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        body_path: CHANGELOG.md
-        append_body: true
-        generate_release_notes: true
-        make_latest: true
-        files: |
-          ./dist/Magisk-Tailscaled-${{ env.LATEST_TAILSCALE_VERSION_TAG }}.0.zip
-          ./dist/Magisk-Tailscaled-arm64-${{ env.LATEST_TAILSCALE_VERSION_TAG }}.0.zip
-          ./dist/Magisk-Tailscaled-arm-${{ env.LATEST_TAILSCALE_VERSION_TAG }}.0.zip
-        name: Magisk Tailscaled ${{ env.LATEST_TAILSCALE_VERSION_TAG }}.0
-        tag_name: ${{ env.LATEST_TAILSCALE_VERSION_TAG }}.0
+    # - name: Create Release
+      # id: create_release
+      # uses: softprops/action-gh-release@v2
+      # env:
+        # GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # with:
+        # body_path: CHANGELOG.md
+        # append_body: true
+        # generate_release_notes: true
+        # make_latest: true
+        # files: |
+          # ./dist/Magisk-Tailscaled-${{ env.LATEST_TAILSCALE_VERSION_TAG }}.0.zip
+          # ./dist/Magisk-Tailscaled-arm64-${{ env.LATEST_TAILSCALE_VERSION_TAG }}.0.zip
+          # ./dist/Magisk-Tailscaled-arm-${{ env.LATEST_TAILSCALE_VERSION_TAG }}.0.zip
+        # name: Magisk Tailscaled ${{ env.LATEST_TAILSCALE_VERSION_TAG }}.0
+        # tag_name: ${{ env.LATEST_TAILSCALE_VERSION_TAG }}.0
 
